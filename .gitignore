@@ -1,0 +1,30 @@
+# Logs
+logs
+*.log
+*.err
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.http.*
+.vite-dev.*
+
+node_modules
+dist
+dist-ssr
+*.local
+platform-tools/
+platform-tools-latest-windows.zip
+.agents/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
