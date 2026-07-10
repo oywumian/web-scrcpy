@@ -1,11 +1,11 @@
+import { spawn } from 'node:child_process'
 import { createReadStream, existsSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { extname, join, normalize, resolve } from 'node:path'
-import { spawn } from 'node:child_process'
 import { AdbServerClient } from '@yume-chan/adb'
-import { AdbServerNodeTcpConnector } from '@yume-chan/adb-server-node-tcp'
 import { AdbScrcpyClient, AdbScrcpyOptionsLatest } from '@yume-chan/adb-scrcpy'
+import { AdbServerNodeTcpConnector } from '@yume-chan/adb-server-node-tcp'
 import {
   AndroidKeyCode,
   AndroidKeyEventAction,
@@ -17,7 +17,16 @@ import {
   ScrcpyPointerId,
 } from '@yume-chan/scrcpy'
 import { PushReadableStream } from '@yume-chan/stream-extra'
+import ffmpegPath from 'ffmpeg-static'
+import wrtcModule from '@roamhq/wrtc'
 import WebSocket, { WebSocketServer } from 'ws'
+
+const {
+  RTCPeerConnection,
+  RTCSessionDescription,
+  RTCIceCandidate,
+  nonstandard: { RTCVideoSource },
+} = wrtcModule
 
 const env =
   typeof process !== 'undefined' && process?.env
@@ -29,6 +38,13 @@ const port = Number(env.PORT ?? 4173)
 const root = resolve('dist')
 const adbPath = resolve('platform-tools/adb.exe')
 const scrcpyServerPath = resolve('node_modules/@yume-chan/fetch-scrcpy-server/server.bin')
+
+const DEFAULT_VIDEO_BIT_RATE = 8_000_000
+const DEFAULT_MAX_FPS = 60
+const MIN_VIDEO_BIT_RATE = 1_000_000
+const MAX_VIDEO_BIT_RATE = 20_000_000
+const MIN_MAX_FPS = 15
+const MAX_MAX_FPS = 60
 
 const mimeTypes = {
   '.bin': 'application/octet-stream',
@@ -48,6 +64,31 @@ const adbClient = new AdbServerClient(
 )
 
 let activeSession
+let activeViewer
+
+function clampNumber(value, minimum, maximum, fallback) {
+  if (!Number.isFinite(value)) {
+    return fallback
+  }
+
+  return Math.min(maximum, Math.max(minimum, Math.round(value)))
+}
+
+function normalizeSessionConfig(payload = {}) {
+  return {
+    videoBitRate: clampNumber(
+      Number(payload.videoBitRate),
+      MIN_VIDEO_BIT_RATE,
+      MAX_VIDEO_BIT_RATE,
+      DEFAULT_VIDEO_BIT_RATE,
+    ),
+    maxFps: clampNumber(Number(payload.maxFps), MIN_MAX_FPS, MAX_MAX_FPS, DEFAULT_MAX_FPS),
+  }
+}
+
+function isSameSessionConfig(left, right) {
+  return left.videoBitRate === right.videoBitRate && left.maxFps === right.maxFps
+}
 
 function serializeSession() {
   if (!activeSession) {
@@ -109,6 +150,75 @@ function runProcess(file, args) {
   })
 }
 
+function stopVideoPipeline(session) {
+  const ffmpeg = session?.ffmpeg
+  session.ffmpeg = null
+
+  if (ffmpeg) {
+    try {
+      ffmpeg.stdin.destroy()
+    } catch {}
+
+    try {
+      ffmpeg.stdout.destroy()
+    } catch {}
+
+    try {
+      ffmpeg.stderr.destroy()
+    } catch {}
+
+    try {
+      ffmpeg.kill('SIGKILL')
+    } catch {}
+  }
+
+  try {
+    session?.videoTrack?.stop()
+  } catch {}
+
+  session.videoTrack = null
+  session.videoSource = null
+  session.frameBuffer = Buffer.alloc(0)
+}
+
+async function detachViewerTrack() {
+  if (!activeViewer?.sender) {
+    return
+  }
+
+  try {
+    await activeViewer.sender.replaceTrack(null)
+  } catch {
+    // Ignore viewer teardown races.
+  }
+}
+
+async function attachViewerTrack(track) {
+  if (!activeViewer?.sender) {
+    return
+  }
+
+  try {
+    await activeViewer.sender.replaceTrack(track ?? null)
+  } catch (error) {
+    pushLog(`切换 WebRTC 视频轨失败：${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+function destroyViewer(viewer = activeViewer) {
+  if (!viewer) {
+    return
+  }
+
+  if (activeViewer === viewer) {
+    activeViewer = null
+  }
+
+  try {
+    viewer.peerConnection.close()
+  } catch {}
+}
+
 async function ensureAdbServer() {
   if (!existsSync(adbPath)) {
     throw new Error('缺少 platform-tools/adb.exe。')
@@ -138,6 +248,85 @@ async function listDevices() {
   }))
 }
 
+function startVideoPipeline(session) {
+  if (!ffmpegPath) {
+    throw new Error('ffmpeg 不可用，无法启动 WebRTC 视频转发。')
+  }
+
+  const width = session.videoMetadata.width
+  const height = session.videoMetadata.height
+  const frameSize = Math.floor(width * height * 1.5)
+  const ffmpeg = spawn(
+    ffmpegPath,
+    [
+      '-loglevel',
+      'error',
+      '-fflags',
+      'nobuffer',
+      '-flags',
+      'low_delay',
+      '-analyzeduration',
+      '0',
+      '-probesize',
+      '32',
+      '-f',
+      'h264',
+      '-i',
+      'pipe:0',
+      '-pix_fmt',
+      'yuv420p',
+      '-f',
+      'rawvideo',
+      'pipe:1',
+    ],
+    {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    },
+  )
+
+  const videoSource = new RTCVideoSource({ isScreencast: true })
+  const videoTrack = videoSource.createTrack()
+
+  session.ffmpeg = ffmpeg
+  session.videoSource = videoSource
+  session.videoTrack = videoTrack
+  session.frameBuffer = Buffer.alloc(0)
+
+  ffmpeg.stdout.on('data', (chunk) => {
+    session.frameBuffer = Buffer.concat([session.frameBuffer, chunk])
+
+    while (session.frameBuffer.length >= frameSize) {
+      const frame = session.frameBuffer.subarray(0, frameSize)
+      session.frameBuffer = session.frameBuffer.subarray(frameSize)
+
+      try {
+        session.videoSource.onFrame({
+          width,
+          height,
+          data: new Uint8Array(frame),
+        })
+      } catch (error) {
+        pushLog(`WebRTC 视频帧写入失败：${error instanceof Error ? error.message : String(error)}`)
+        break
+      }
+    }
+  })
+
+  ffmpeg.stderr.on('data', (chunk) => {
+    const line = chunk.toString().trim()
+    if (line) {
+      pushLog(`ffmpeg: ${line}`)
+    }
+  })
+
+  ffmpeg.on('close', (code) => {
+    if (activeSession === session && code && code !== 0) {
+      pushLog(`ffmpeg 已退出，退出码 ${code}。`)
+    }
+  })
+}
+
 async function stopSession(reason = '镜像已停止。') {
   const session = activeSession
   if (!session) {
@@ -149,27 +338,22 @@ async function stopSession(reason = '镜像已停止。') {
 
   try {
     session.videoReader?.cancel()
-  } catch {
-    // Ignore canceled streams during shutdown.
-  }
+  } catch {}
 
   try {
     session.outputReader?.cancel()
-  } catch {
-    // Ignore canceled streams during shutdown.
-  }
+  } catch {}
+
+  stopVideoPipeline(session)
+  await detachViewerTrack()
 
   try {
     await session.client.close()
-  } catch {
-    // Ignore client shutdown races.
-  }
+  } catch {}
 
   try {
     await session.adb.close()
-  } catch {
-    // Ignore ADB shutdown races.
-  }
+  } catch {}
 
   pushLog(reason)
   broadcastJson({ type: 'session', session: serializeSession() })
@@ -194,8 +378,14 @@ async function broadcastDevices(targetWs) {
   }
 }
 
-async function startSession(serial) {
-  if (activeSession?.serial === serial && activeSession.state === 'connected') {
+async function startSession(serial, rawConfig = {}) {
+  const config = normalizeSessionConfig(rawConfig)
+
+  if (
+    activeSession?.serial === serial &&
+    activeSession.state === 'connected' &&
+    isSameSessionConfig(activeSession.config, config)
+  ) {
     broadcastJson({ type: 'session', session: serializeSession() })
     return
   }
@@ -216,10 +406,11 @@ async function startSession(serial) {
     cleanup: true,
     control: true,
     logLevel: 'info',
+    maxFps: config.maxFps,
     maxSize: 1600,
     powerOn: true,
     video: true,
-    videoBitRate: 8_000_000,
+    videoBitRate: config.videoBitRate,
     videoCodec: 'h264',
   })
 
@@ -232,6 +423,10 @@ async function startSession(serial) {
   activeSession = {
     adb,
     client,
+    config,
+    ffmpeg: null,
+    frameBuffer: Buffer.alloc(0),
+    lastConfigurationPacket: null,
     name,
     outputReader: null,
     serial,
@@ -242,10 +437,16 @@ async function startSession(serial) {
       width: video.width || video.metadata.width || 1080,
     },
     videoReader: null,
-    lastConfigurationPacket: null,
+    videoSource: null,
+    videoTrack: null,
   }
 
-  pushLog(`已启动镜像：${name}（${serial}）。`)
+  startVideoPipeline(activeSession)
+  await attachViewerTrack(activeSession.videoTrack)
+
+  pushLog(
+    `已启动镜像：${name}（${serial}），采集码率 ${(config.videoBitRate / 1_000_000).toFixed(0)} Mbps，${config.maxFps} FPS。`,
+  )
   broadcastJson({ type: 'session', session: serializeSession() })
 
   activeSession.outputReader = client.output.getReader()
@@ -293,15 +494,9 @@ async function startSession(serial) {
           session.lastConfigurationPacket = value
         }
 
-        broadcastJson({
-          type: 'video',
-          packet: {
-            kind: value.type,
-            data: Buffer.from(value.data).toString('base64'),
-            keyframe: value.type === 'data' ? value.keyframe : undefined,
-            pts: value.type === 'data' && value.pts !== undefined ? value.pts.toString() : undefined,
-          },
-        })
+        if (session.ffmpeg?.stdin.writable) {
+          session.ffmpeg.stdin.write(value.data)
+        }
       }
     } catch (error) {
       if (activeSession === session) {
@@ -313,6 +508,65 @@ async function startSession(serial) {
       await stopSession('镜像会话已结束。')
     }
   })()
+}
+
+async function handleWebRtcOffer(ws, payload) {
+  if (!payload.sdp) {
+    sendJson(ws, { type: 'error', message: '缺少 WebRTC offer。' })
+    return
+  }
+
+  if (activeViewer?.ws && activeViewer.ws !== ws) {
+    destroyViewer(activeViewer)
+  }
+
+  if (activeViewer?.ws === ws) {
+    destroyViewer(activeViewer)
+  }
+
+  const peerConnection = new RTCPeerConnection({
+    iceServers: [],
+  })
+
+  const sender = peerConnection.addTrack(activeSession?.videoTrack ?? null)
+
+  activeViewer = {
+    ws,
+    peerConnection,
+    sender,
+  }
+
+  peerConnection.onicecandidate = ({ candidate }) => {
+    if (candidate) {
+      sendJson(ws, { type: 'webrtc-ice-candidate', candidate })
+    }
+  }
+
+  peerConnection.onconnectionstatechange = () => {
+    const state = peerConnection.connectionState
+    if (state === 'failed' || state === 'closed' || state === 'disconnected') {
+      destroyViewer(activeViewer?.peerConnection === peerConnection ? activeViewer : null)
+    }
+  }
+
+  await peerConnection.setRemoteDescription(
+    new RTCSessionDescription({
+      type: 'offer',
+      sdp: payload.sdp,
+    }),
+  )
+
+  const answer = await peerConnection.createAnswer()
+  await peerConnection.setLocalDescription(answer)
+
+  sendJson(ws, {
+    type: 'webrtc-answer',
+    sdp: peerConnection.localDescription?.sdp,
+  })
+
+  if (activeSession?.videoTrack) {
+    await attachViewerTrack(activeSession.videoTrack)
+  }
 }
 
 async function handleClientMessage(ws, rawMessage) {
@@ -336,7 +590,7 @@ async function handleClientMessage(ws, rawMessage) {
         },
       })
 
-      await startSession(payload.serial)
+      await startSession(payload.serial, payload)
       await broadcastDevices()
       return
     case 'disconnect-device':
@@ -427,6 +681,16 @@ async function handleClientMessage(ws, rawMessage) {
             : AndroidMotionEventButton.Primary,
       })
       return
+    case 'webrtc-offer':
+      await handleWebRtcOffer(ws, payload)
+      return
+    case 'webrtc-ice-candidate':
+      if (!activeViewer?.peerConnection || activeViewer.ws !== ws || !payload.candidate) {
+        return
+      }
+
+      await activeViewer.peerConnection.addIceCandidate(new RTCIceCandidate(payload.candidate))
+      return
     default:
       sendJson(ws, { type: 'error', message: `未知消息类型：${payload.type}` })
   }
@@ -478,18 +742,6 @@ wss.on('connection', async (ws) => {
   sendJson(ws, { type: 'hello', session: serializeSession() })
   await broadcastDevices(ws)
 
-  if (activeSession?.lastConfigurationPacket) {
-    sendJson(ws, {
-      type: 'video',
-      packet: {
-        kind: 'configuration',
-        data: Buffer.from(activeSession.lastConfigurationPacket.data).toString('base64'),
-      },
-    })
-
-    void activeSession.client.controller?.resetVideo()
-  }
-
   ws.on('message', async (message) => {
     try {
       await handleClientMessage(ws, message)
@@ -503,6 +755,10 @@ wss.on('connection', async (ws) => {
 
   ws.on('close', () => {
     wsClients.delete(ws)
+
+    if (activeViewer?.ws === ws) {
+      destroyViewer(activeViewer)
+    }
   })
 })
 

@@ -9,6 +9,9 @@ pnpm-debug.log*
 lerna-debug.log*
 .http.*
 .vite-dev.*
+gh-portable/
+gh_*.zip
+*-source-*.zip
 
 node_modules
 dist

@@ -1,14 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent } from 'react'
-import { AndroidMotionEventAction, type ScrcpyMediaStreamPacket, type ScrcpyVideoCodecId } from '@yume-chan/scrcpy'
-import {
-  BitmapVideoFrameRenderer,
-  WebCodecsVideoDecoder,
-  WebGLVideoFrameRenderer,
-} from '@yume-chan/scrcpy-decoder-webcodecs'
+import { AndroidMotionEventAction, type ScrcpyVideoCodecId } from '@yume-chan/scrcpy'
 import './App.css'
 
 type MirrorState = 'idle' | 'connecting' | 'connected' | 'error'
-
 type DeviceState = 'device' | 'offline' | 'unauthorized'
 
 type DeviceInfo = {
@@ -32,18 +26,14 @@ type ServerMessage =
   | { type: 'hello'; session: SessionInfo }
   | { type: 'log'; line: string }
   | { type: 'session'; session: SessionInfo }
-  | {
-      type: 'video'
-      packet: {
-        data: string
-        keyframe?: boolean
-        kind: 'configuration' | 'data'
-        pts?: string
-      }
-    }
+  | { type: 'webrtc-answer'; sdp?: string }
+  | { type: 'webrtc-ice-candidate'; candidate: RTCIceCandidateInit }
 
 const MAX_LOG_LINES = 150
 const DEVICE_REFRESH_MS = 5000
+const FPS_SAMPLE_MS = 5000
+const TARGET_FPS = 60
+const CAPTURE_BIT_RATE = 12
 
 const DEVICE_STATE_LABEL: Record<DeviceState, string> = {
   device: '可连接',
@@ -56,84 +46,116 @@ function App() {
   const [selectedSerial, setSelectedSerial] = useState('')
   const [session, setSession] = useState<SessionInfo>({ state: 'idle' })
   const [screenSize, setScreenSize] = useState({ width: 1080, height: 1920 })
-  const [bitRate, setBitRate] = useState(4)
-  const [fps, setFps] = useState(30)
+  const [estimatedFps, setEstimatedFps] = useState(0)
   const [typedText, setTypedText] = useState('')
   const [logLines, setLogLines] = useState<string[]>([])
   const [socketReady, setSocketReady] = useState(false)
+  const [showLogs, setShowLogs] = useState(false)
 
   const socketRef = useRef<WebSocket | null>(null)
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const decoderRef = useRef<WebCodecsVideoDecoder | null>(null)
-  const packetWriterRef = useRef<WritableStreamDefaultWriter<ScrcpyMediaStreamPacket> | null>(null)
+  const peerRef = useRef<RTCPeerConnection | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
   const screenSizeRef = useRef({ width: 1080, height: 1920 })
-  const removeSizeListenerRef = useRef<(() => void) | null>(null)
   const pointerDownRef = useRef(false)
+  const frameCountRef = useRef(0)
 
   const appendLog = useCallback((line: string) => {
     const stamped = `[${new Date().toLocaleTimeString()}] ${line}`
     setLogLines((current) => [...current.slice(-MAX_LOG_LINES + 1), stamped])
   }, [])
 
-  const disposeDecoder = useCallback(async () => {
+  const disposePeer = useCallback(() => {
     pointerDownRef.current = false
 
-    const writer = packetWriterRef.current
-    packetWriterRef.current = null
-    if (writer) {
+    const peer = peerRef.current
+    peerRef.current = null
+
+    if (peer) {
       try {
-        await writer.close()
+        peer.ontrack = null
+        peer.onicecandidate = null
+        peer.close()
       } catch {
-        // Decoder teardown can race with the stream finishing.
+        // Ignore close races.
       }
     }
 
-    const decoder = decoderRef.current
-    decoderRef.current = null
-    removeSizeListenerRef.current?.()
-    removeSizeListenerRef.current = null
-    decoder?.dispose()
+    const video = videoRef.current
+    if (video) {
+      video.srcObject = null
+    }
   }, [])
 
-  const createDecoder = useCallback(
-    async (nextSession: SessionInfo) => {
-      if (!nextSession.codec || !canvasRef.current) {
+  const sendMessage = useCallback(
+    (payload: object) => {
+      const socket = socketRef.current
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        appendLog('浏览器还没有连到控制服务。')
+        return false
+      }
+
+      socket.send(JSON.stringify(payload))
+      return true
+    },
+    [appendLog],
+  )
+
+  const startWebRtc = useCallback(async (serialOverride?: string) => {
+    const targetSerial = serialOverride ?? session.serial
+
+    if (!socketReady || !targetSerial || peerRef.current) {
+      return
+    }
+
+    const peer = new RTCPeerConnection({
+      iceServers: [],
+    })
+
+    peerRef.current = peer
+    peer.addTransceiver('video', { direction: 'recvonly' })
+
+    peer.ontrack = (event) => {
+      const video = videoRef.current
+      if (!video) {
         return
       }
 
-      await disposeDecoder()
-
-      screenSizeRef.current = {
-        width: nextSession.width || 1080,
-        height: nextSession.height || 1920,
+      const [stream] = event.streams
+      if (stream) {
+        video.srcObject = stream
+      } else {
+        video.srcObject = new MediaStream([event.track])
       }
-      setScreenSize(screenSizeRef.current)
+    }
 
-      const renderer = WebGLVideoFrameRenderer.isSupported
-        ? new WebGLVideoFrameRenderer(canvasRef.current)
-        : new BitmapVideoFrameRenderer(canvasRef.current)
+    peer.onicecandidate = (event) => {
+      if (event.candidate) {
+        sendMessage({
+          type: 'webrtc-ice-candidate',
+          candidate: event.candidate.toJSON(),
+        })
+      }
+    }
 
-      const decoder = new WebCodecsVideoDecoder({
-        codec: nextSession.codec,
-        renderer,
-      })
+    const offer = await peer.createOffer()
+    await peer.setLocalDescription(offer)
 
-      decoderRef.current = decoder
-      removeSizeListenerRef.current = decoder.sizeChanged(({ width, height }) => {
-        screenSizeRef.current = { width, height }
-        setScreenSize({ width, height })
-      })
-      packetWriterRef.current = decoder.writable.getWriter()
-    },
-    [disposeDecoder],
-  )
+    const sent = sendMessage({
+      type: 'webrtc-offer',
+      sdp: offer.sdp,
+    })
+
+    if (!sent) {
+      disposePeer()
+    }
+  }, [disposePeer, sendMessage, session.serial, socketReady])
 
   useEffect(() => {
     return () => {
-      void disposeDecoder()
+      disposePeer()
       socketRef.current?.close()
     }
-  }, [disposeDecoder])
+  }, [disposePeer])
 
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
@@ -148,6 +170,7 @@ function App() {
     socket.addEventListener('close', () => {
       setSocketReady(false)
       setSession({ state: 'error' })
+      disposePeer()
       appendLog('共享控制服务已断开。')
     })
 
@@ -167,13 +190,23 @@ function App() {
         case 'hello':
         case 'session':
           setSession(message.session)
+
           if (message.session.serial) {
             setSelectedSerial((current) => current || message.session.serial || '')
           }
+
+          if (message.session.width && message.session.height) {
+            screenSizeRef.current = {
+              width: message.session.width,
+              height: message.session.height,
+            }
+            setScreenSize(screenSizeRef.current)
+          }
+
           if (message.session.state !== 'connected') {
-            void disposeDecoder()
-          } else {
-            void createDecoder(message.session)
+            disposePeer()
+          } else if (message.session.serial) {
+            void startWebRtc(message.session.serial)
           }
           break
         case 'devices':
@@ -183,7 +216,7 @@ function App() {
               return current
             }
 
-            return message.devices[0]?.serial ?? ''
+            return message.devices.find((device) => device.state === 'device')?.serial ?? ''
           })
           break
         case 'log':
@@ -192,27 +225,25 @@ function App() {
         case 'error':
           appendLog(message.message)
           break
-        case 'video': {
-          const writer = packetWriterRef.current
-          if (!writer) {
+        case 'webrtc-answer': {
+          const peer = peerRef.current
+          if (!peer || !message.sdp) {
             return
           }
 
-          const data = Uint8Array.from(atob(message.packet.data), (value) => value.charCodeAt(0))
+          void peer.setRemoteDescription({
+            type: 'answer',
+            sdp: message.sdp,
+          })
+          break
+        }
+        case 'webrtc-ice-candidate': {
+          const peer = peerRef.current
+          if (!peer) {
+            return
+          }
 
-          void writer.write(
-            message.packet.kind === 'configuration'
-              ? {
-                  type: 'configuration',
-                  data,
-                }
-              : {
-                  type: 'data',
-                  data,
-                  keyframe: message.packet.keyframe,
-                  pts: message.packet.pts ? BigInt(message.packet.pts) : undefined,
-                },
-          )
+          void peer.addIceCandidate(message.candidate)
           break
         }
       }
@@ -221,7 +252,7 @@ function App() {
     return () => {
       socket.close()
     }
-  }, [appendLog, createDecoder, disposeDecoder])
+  }, [appendLog, disposePeer])
 
   useEffect(() => {
     if (!socketReady) {
@@ -240,75 +271,159 @@ function App() {
     }
   }, [socketReady])
 
-  const sendMessage = useCallback((payload: object) => {
-    const socket = socketRef.current
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      appendLog('浏览器还没有连接到控制服务。')
+  useEffect(() => {
+    if (session.state === 'connected') {
+      void startWebRtc()
       return
     }
 
-    socket.send(JSON.stringify(payload))
-  }, [appendLog])
+    disposePeer()
+  }, [disposePeer, session.state, startWebRtc])
 
-  const handleConnect = useCallback((serial?: string) => {
-    const nextSerial = serial || selectedSerial
-
-    if (!nextSerial) {
-      appendLog('请先选择一台设备。')
+  useEffect(() => {
+    if (!socketReady || session.state !== 'connected' || !session.serial) {
       return
     }
 
-    setSelectedSerial(nextSerial)
-    setSession((current) => ({ ...current, state: 'connecting' }))
-    sendMessage({ type: 'connect-device', serial: nextSerial })
-  }, [appendLog, selectedSerial, sendMessage])
+    const timer = window.setTimeout(() => {
+      const video = videoRef.current
+      const hasFrame = Boolean(video?.srcObject) || Boolean(video && video.readyState >= 2 && !video.paused)
+      if (hasFrame) {
+        return
+      }
+
+      disposePeer()
+      sendMessage({
+        type: 'connect-device',
+        serial: session.serial,
+        videoBitRate: CAPTURE_BIT_RATE * 1_000_000,
+        maxFps: TARGET_FPS,
+      })
+    }, 1800)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [disposePeer, sendMessage, session.serial, session.state, socketReady])
+
+  useEffect(() => {
+    if (session.state !== 'connected' || !session.serial) {
+      frameCountRef.current = 0
+      setEstimatedFps(0)
+      return
+    }
+
+    frameCountRef.current = 0
+    setEstimatedFps(0)
+
+    const video = videoRef.current
+    const videoWithFrameCallback = video as
+      | (HTMLVideoElement & {
+          requestVideoFrameCallback: (cb: () => void) => number
+        })
+      | null
+
+    if (videoWithFrameCallback && 'requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+      const frameCallback = () => {
+        frameCountRef.current += 1
+        videoWithFrameCallback.requestVideoFrameCallback(frameCallback)
+      }
+
+      videoWithFrameCallback.requestVideoFrameCallback(frameCallback)
+    }
+
+    const timer = window.setInterval(() => {
+      const elapsedSeconds = FPS_SAMPLE_MS / 1000
+      const measuredFps = Math.round((frameCountRef.current / elapsedSeconds) * 10) / 10
+
+      frameCountRef.current = 0
+      setEstimatedFps(measuredFps)
+    }, FPS_SAMPLE_MS)
+
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [session.serial, session.state])
+
+  const handleConnect = useCallback(
+    (serial?: string) => {
+      const nextSerial = serial || selectedSerial
+
+      if (!nextSerial) {
+        appendLog('请先选择一台设备。')
+        return
+      }
+
+      setSelectedSerial(nextSerial)
+      setSession((current) => ({ ...current, state: 'connecting' }))
+      sendMessage({
+        type: 'connect-device',
+        serial: nextSerial,
+        videoBitRate: CAPTURE_BIT_RATE * 1_000_000,
+        maxFps: TARGET_FPS,
+      })
+    },
+    [appendLog, selectedSerial, sendMessage],
+  )
 
   const handleDisconnect = useCallback(() => {
     sendMessage({ type: 'disconnect-device' })
     setSession({ state: 'idle' })
-    void disposeDecoder()
-  }, [disposeDecoder, sendMessage])
+    disposePeer()
+  }, [disposePeer, sendMessage])
 
-  const sendTouch = useCallback((event: PointerEvent<HTMLCanvasElement>, action: number) => {
-    const canvas = canvasRef.current
-    if (!canvas) {
-      return
-    }
+  const sendTouch = useCallback(
+    (event: PointerEvent<HTMLVideoElement>, action: number) => {
+      const video = videoRef.current
+      if (!video) {
+        return
+      }
 
-    const rect = canvas.getBoundingClientRect()
-    if (!rect.width || !rect.height) {
-      return
-    }
+      const rect = video.getBoundingClientRect()
+      if (!rect.width || !rect.height) {
+        return
+      }
 
-    const x = Math.max(
-      0,
-      Math.min(screenSizeRef.current.width, Math.round(((event.clientX - rect.left) / rect.width) * screenSizeRef.current.width)),
-    )
-    const y = Math.max(
-      0,
-      Math.min(screenSizeRef.current.height, Math.round(((event.clientY - rect.top) / rect.height) * screenSizeRef.current.height)),
-    )
+      const x = Math.max(
+        0,
+        Math.min(
+          screenSizeRef.current.width,
+          Math.round(((event.clientX - rect.left) / rect.width) * screenSizeRef.current.width),
+        ),
+      )
+      const y = Math.max(
+        0,
+        Math.min(
+          screenSizeRef.current.height,
+          Math.round(((event.clientY - rect.top) / rect.height) * screenSizeRef.current.height),
+        ),
+      )
 
-    sendMessage({
-      type: 'touch',
-      action,
-      pointerX: x,
-      pointerY: y,
-      videoWidth: screenSizeRef.current.width,
-      videoHeight: screenSizeRef.current.height,
-    })
-  }, [sendMessage])
+      sendMessage({
+        type: 'touch',
+        action,
+        pointerX: x,
+        pointerY: y,
+        videoWidth: screenSizeRef.current.width,
+        videoHeight: screenSizeRef.current.height,
+      })
+    },
+    [sendMessage],
+  )
 
-  const handleTextSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const handleTextSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
 
-    if (!typedText.trim()) {
-      return
-    }
+      if (!typedText.trim()) {
+        return
+      }
 
-    sendMessage({ type: 'send-text', text: typedText })
-    setTypedText('')
-  }, [sendMessage, typedText])
+      sendMessage({ type: 'send-text', text: typedText })
+      setTypedText('')
+    },
+    [sendMessage, typedText],
+  )
 
   const selectedDevice = useMemo(
     () => devices.find((device) => device.serial === selectedSerial),
@@ -342,42 +457,66 @@ function App() {
       case 'connected':
         return '正在控制'
       case 'connecting':
-        return '正在启动镜像'
+        return '正在启动投屏'
       case 'error':
         return '连接异常'
       default:
-        return '就绪'
+        return '准备就绪'
     }
   }, [session.state, socketReady])
 
   const canControl = session.state === 'connected'
+  const activeDeviceName = session.name || selectedDevice?.model || '当前没有活动镜像'
 
   return (
     <main className="app-shell">
       <section className="sidebar">
-        <div className="panel panel-heading">
+        <div className="panel panel-heading desktop-heading">
           <div>
             <p className="eyebrow">共享版 Web Scrcpy</p>
-            <h1>安卓控制台</h1>
+            <h2>设备与会话</h2>
           </div>
           <span className={`status-pill ${statusTone}`}>{statusText}</span>
         </div>
 
         <div className="panel">
           <div className="panel-bar">
-            <label className="field-label">设备列表</label>
-            <div className="panel-actions">
-              <span className="inline-note">自动搜寻中</span>
-              <button type="button" className="ghost-button" onClick={() => sendMessage({ type: 'refresh-devices' })}>
-                刷新
-              </button>
+            <label className="field-label">会话概览</label>
+            <span className="inline-note">{availableDevices.length} 台可连接</span>
+          </div>
+          <div className="stats-grid">
+            <div className="stat-card">
+              <span>当前设备</span>
+              <strong>{activeDeviceName}</strong>
+            </div>
+            <div className="stat-card">
+              <span>目标帧率</span>
+              <strong>{TARGET_FPS} FPS</strong>
+            </div>
+            <div className="stat-card">
+              <span>估算帧率</span>
+              <strong>{estimatedFps || 0} FPS</strong>
+            </div>
+            <div className="stat-card">
+              <span>采集码率</span>
+              <strong>{CAPTURE_BIT_RATE} Mbps</strong>
             </div>
           </div>
-          <div className="device-card-grid">
+          <p className="hint">视频已经切到后端 WebRTC 分发，浏览器只负责收视频和发控制指令。</p>
+        </div>
+
+        <div className="panel desktop-device-panel">
+          <div className="panel-bar">
+            <label className="field-label">设备切换</label>
+            <button type="button" className="ghost-button" onClick={() => sendMessage({ type: 'refresh-devices' })}>
+              刷新
+            </button>
+          </div>
+          <div className="device-strip vertical">
             {devices.length === 0 ? (
               <div className="empty-card">
                 <strong>还没有发现设备</strong>
-                <p className="hint">请连接手机并确认 USB 调试授权，列表会自动刷新。</p>
+                <p className="hint">请确认手机已连接，并允许 USB 调试。</p>
               </div>
             ) : (
               devices.map((device) => {
@@ -388,30 +527,21 @@ function App() {
                 return (
                   <article
                     key={device.serial}
-                    className={`device-card${isSelected ? ' selected' : ''}${isActive ? ' active' : ''}`}
+                    className={`device-tile${isSelected ? ' selected' : ''}${isActive ? ' active' : ''}`}
                   >
-                    <button
-                      type="button"
-                      className="device-card-hitbox"
-                      onClick={() => setSelectedSerial(device.serial)}
-                    >
-                      <div className="device-card-head">
+                    <button type="button" className="device-tile-hitbox" onClick={() => setSelectedSerial(device.serial)}>
+                      <div className="device-tile-head">
                         <strong>{(device.model || device.serial).trim()}</strong>
                         <span className={`device-badge ${device.state}`}>{DEVICE_STATE_LABEL[device.state]}</span>
                       </div>
                       <div className="device-meta">{device.serial}</div>
-                      <div className="device-card-foot">
-                        <span className="device-role">
-                          {isActive ? '当前镜像设备' : isSelected ? '已选中' : '点击可切换'}
-                        </span>
-                        <span className="device-cta">
-                          {isActive ? '已连接' : device.state === 'device' ? '可连接' : '等待授权'}
-                        </span>
+                      <div className="device-role">
+                        {isActive ? '当前镜像设备' : isSelected ? '已选中' : '点一下选择'}
                       </div>
                     </button>
                     <button
                       type="button"
-                      className="primary-button device-connect"
+                      className="primary-button tile-connect"
                       onClick={() => handleConnect(device.serial)}
                       disabled={!canStart}
                     >
@@ -422,83 +552,21 @@ function App() {
               })
             )}
           </div>
-          <div className="stack section-gap">
-            <div className="device-row">
-              <strong>{session.name || selectedDevice?.model || '当前没有活动镜像'}</strong>
-              <span className="inline-note">{availableDevices.length} 台可连接</span>
-            </div>
-            <p className="hint">
-              这一版由服务端统一连接手机，所以打开这个网页的人都能看到并控制同一台设备。
-            </p>
-          </div>
         </div>
 
         <div className="panel">
           <div className="panel-bar">
-            <label className="field-label">连接设置</label>
-            <span className="inline-note">通用参数</span>
+            <label className="field-label">连接策略</label>
+            <span className="inline-note">视频单路、无音频</span>
           </div>
           <div className="settings-stack">
             <div className="setting-block">
               <div className="setting-head">
-                <strong>码率 (Mbps)</strong>
-                <span className="setting-value">当前：{bitRate} Mbps</span>
+                <strong>后端采集</strong>
+                <span className="setting-value">固定 {CAPTURE_BIT_RATE} Mbps / {TARGET_FPS} FPS</span>
               </div>
-              <div className="segmented-row">
-                {[2, 4, 8, 12].map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={`segment-button${bitRate === value ? ' active' : ''}`}
-                    onClick={() => setBitRate(value)}
-                  >
-                    {value} Mbps
-                  </button>
-                ))}
-              </div>
-              <input
-                type="range"
-                min={1}
-                max={20}
-                step={1}
-                value={bitRate}
-                onChange={(event) => setBitRate(Number(event.target.value))}
-              />
-              <div className="range-labels">
-                <span>1 Mbps</span>
-                <span>20 Mbps</span>
-              </div>
-            </div>
-
-            <div className="setting-block">
-              <div className="setting-head">
-                <strong>FPS (帧率)</strong>
-                <span className="setting-value">当前：{fps} FPS</span>
-              </div>
-              <div className="segmented-row">
-                {[24, 30, 45, 60].map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={`segment-button${fps === value ? ' active' : ''}`}
-                    onClick={() => setFps(value)}
-                  >
-                    {value} FPS
-                  </button>
-                ))}
-              </div>
-              <input
-                type="range"
-                min={15}
-                max={60}
-                step={1}
-                value={fps}
-                onChange={(event) => setFps(Number(event.target.value))}
-              />
-              <div className="range-labels">
-                <span>15 FPS</span>
-                <span>60 FPS</span>
-              </div>
+              <p className="hint">手机通过 USB 走高质量 scrcpy 采集，前端通过 WebRTC 收视频。</p>
+              <p className="hint">这一版先移除了“低帧率自动重连降码率”，避免前端误判导致反复重连。</p>
             </div>
           </div>
         </div>
@@ -524,11 +592,16 @@ function App() {
         <div className="panel log-panel">
           <div className="panel-bar">
             <label className="field-label">运行日志</label>
-            <button type="button" className="ghost-button" onClick={() => setLogLines([])}>
-              清空
-            </button>
+            <div className="panel-actions">
+              <button type="button" className="ghost-button mobile-only" onClick={() => setShowLogs((current) => !current)}>
+                {showLogs ? '收起' : '展开'}
+              </button>
+              <button type="button" className="ghost-button" onClick={() => setLogLines([])}>
+                清空
+              </button>
+            </div>
           </div>
-          <div className="log-list" aria-live="polite">
+          <div className={`log-list${showLogs ? ' show-mobile' : ''}`} aria-live="polite">
             {logLines.length === 0 ? (
               <p className="log-empty">还没有日志。</p>
             ) : (
@@ -543,10 +616,82 @@ function App() {
       </section>
 
       <section className="stage">
+        <div className="mobile-hero">
+          <div>
+            <p className="eyebrow">共享版 Web Scrcpy</p>
+            <h1>手机端控制台</h1>
+          </div>
+          <span className={`status-pill ${statusTone}`}>{statusText}</span>
+        </div>
+
+        <div className="mobile-summary">
+          <div className="summary-chip">
+            <span>当前设备</span>
+            <strong>{activeDeviceName}</strong>
+          </div>
+          <div className="summary-chip">
+            <span>估算帧率</span>
+            <strong>{estimatedFps || 0} FPS</strong>
+          </div>
+          <div className="summary-chip">
+            <span>采集码率</span>
+            <strong>{CAPTURE_BIT_RATE} Mbps</strong>
+          </div>
+        </div>
+
+        <div className="panel mobile-device-panel">
+          <div className="panel-bar">
+            <label className="field-label">设备切换</label>
+            <button type="button" className="ghost-button" onClick={() => sendMessage({ type: 'refresh-devices' })}>
+              刷新
+            </button>
+          </div>
+          <div className="device-strip">
+            {devices.length === 0 ? (
+              <div className="empty-card">
+                <strong>还没有发现设备</strong>
+                <p className="hint">请确认手机已连接，并允许 USB 调试。</p>
+              </div>
+            ) : (
+              devices.map((device) => {
+                const isActive = session.serial === device.serial && canControl
+                const isSelected = selectedSerial === device.serial
+                const canStart = socketReady && device.state === 'device' && session.state !== 'connecting'
+
+                return (
+                  <article
+                    key={device.serial}
+                    className={`device-tile${isSelected ? ' selected' : ''}${isActive ? ' active' : ''}`}
+                  >
+                    <button type="button" className="device-tile-hitbox" onClick={() => setSelectedSerial(device.serial)}>
+                      <div className="device-tile-head">
+                        <strong>{(device.model || device.serial).trim()}</strong>
+                        <span className={`device-badge ${device.state}`}>{DEVICE_STATE_LABEL[device.state]}</span>
+                      </div>
+                      <div className="device-meta">{device.serial}</div>
+                      <div className="device-role">
+                        {isActive ? '当前镜像设备' : isSelected ? '已选中' : '点一下选择'}
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-button tile-connect"
+                      onClick={() => handleConnect(device.serial)}
+                      disabled={!canStart}
+                    >
+                      {isActive ? '重连' : '连接'}
+                    </button>
+                  </article>
+                )
+              })
+            )}
+          </div>
+        </div>
+
         <div className="stage-header">
           <div>
-            <p className="eyebrow">镜像画面</p>
-            <h2>共享实时画面</h2>
+            <p className="eyebrow">WebRTC 画面</p>
+            <h2>实时共享画面</h2>
           </div>
           <span className="resolution-tag">
             {screenSize.width} x {screenSize.height}
@@ -554,9 +699,12 @@ function App() {
         </div>
 
         <div className="screen-frame">
-          <canvas
-            ref={canvasRef}
+          <video
+            ref={videoRef}
             className="phone-screen"
+            autoPlay
+            muted
+            playsInline
             onPointerDown={(event) => {
               pointerDownRef.current = true
               event.currentTarget.setPointerCapture(event.pointerId)
@@ -580,12 +728,12 @@ function App() {
           />
           {!canControl && (
             <div className="screen-overlay">
-              <span>{socketReady ? '请选择设备并启动镜像。' : '正在等待控制服务。'}</span>
+              <span>{socketReady ? '请选择设备并启动投屏。' : '正在等待控制服务。'}</span>
             </div>
           )}
         </div>
 
-        <div className="panel">
+        <div className="panel quick-panel">
           <label className="field-label">快捷控制</label>
           <div className="control-grid">
             <button type="button" onClick={() => sendMessage({ type: 'command', command: 'back' })} disabled={!canControl}>
@@ -598,7 +746,7 @@ function App() {
               多任务
             </button>
             <button type="button" onClick={() => sendMessage({ type: 'command', command: 'screen-off' })} disabled={!canControl}>
-              息屏
+              熄屏
             </button>
             <button type="button" onClick={() => sendMessage({ type: 'command', command: 'rotate' })} disabled={!canControl}>
               旋转
