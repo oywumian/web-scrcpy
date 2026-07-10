@@ -35,6 +35,7 @@ const MIN_VIDEO_BIT_RATE = 1_000_000
 const MAX_VIDEO_BIT_RATE = 20_000_000
 const MIN_MAX_FPS = 15
 const MAX_MAX_FPS = 60
+const SCREEN_OFF_GUARD_INTERVAL_MS = 60_000
 
 const VIDEO_PACKET_CONFIGURATION = 0
 const VIDEO_PACKET_KEYFRAME = 1
@@ -49,8 +50,8 @@ const mimeTypes = {
   '.svg': 'image/svg+xml',
 }
 
-const wsClients = new Set()
-const videoClients = new Set()
+const controlClients = new Map()
+const videoClients = new Map()
 const adbClient = new AdbServerClient(
   new AdbServerNodeTcpConnector({
     host: '127.0.0.1',
@@ -59,6 +60,45 @@ const adbClient = new AdbServerClient(
 )
 
 let activeSession
+
+function getClientId(requestUrl) {
+  return requestUrl.searchParams.get('clientId') || 'default-client'
+}
+
+function closeSocket(ws, code = 4000, reason = 'Another controller has taken over.') {
+  if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+    return
+  }
+
+  try {
+    ws.close(code, reason)
+  } catch {}
+}
+
+function closeClientPair(clientId, reason) {
+  const controlWs = controlClients.get(clientId)
+  const videoWs = videoClients.get(clientId)
+
+  closeSocket(controlWs, 4000, reason)
+  closeSocket(videoWs, 4000, reason)
+
+  controlClients.delete(clientId)
+  videoClients.delete(clientId)
+}
+
+function evictOtherClients(activeClientId) {
+  for (const clientId of controlClients.keys()) {
+    if (clientId !== activeClientId) {
+      closeClientPair(clientId, 'Another controller page has connected.')
+    }
+  }
+
+  for (const clientId of videoClients.keys()) {
+    if (clientId !== activeClientId) {
+      closeClientPair(clientId, 'Another controller page has connected.')
+    }
+  }
+}
 
 function clampNumber(value, minimum, maximum, fallback) {
   if (!Number.isFinite(value)) {
@@ -70,6 +110,7 @@ function clampNumber(value, minimum, maximum, fallback) {
 
 function normalizeSessionConfig(payload = {}) {
   return {
+    screenOff: Boolean(payload.screenOff),
     videoBitRate: clampNumber(
       Number(payload.videoBitRate),
       MIN_VIDEO_BIT_RATE,
@@ -81,7 +122,11 @@ function normalizeSessionConfig(payload = {}) {
 }
 
 function isSameSessionConfig(left, right) {
-  return left.videoBitRate === right.videoBitRate && left.maxFps === right.maxFps
+  return (
+    left.videoBitRate === right.videoBitRate &&
+    left.maxFps === right.maxFps &&
+    left.screenOff === right.screenOff
+  )
 }
 
 function serializeSession() {
@@ -106,7 +151,7 @@ function sendJson(ws, payload) {
 }
 
 function broadcastJson(payload) {
-  for (const ws of wsClients) {
+  for (const ws of controlClients.values()) {
     sendJson(ws, payload)
   }
 }
@@ -115,6 +160,26 @@ function pushLog(line) {
   const stamped = `[server] ${line}`
   console.log(stamped)
   broadcastJson({ type: 'log', line: stamped })
+}
+
+async function setDeviceScreenPower(controller, mode) {
+  if (!controller) {
+    return
+  }
+
+  if (mode === AndroidScreenPowerMode.Off) {
+    pushLog('Sending screen-off command to device.')
+  } else {
+    pushLog('Sending screen-on command to device.')
+  }
+
+  await controller.setScreenPowerMode(mode)
+
+  if (mode === AndroidScreenPowerMode.Off) {
+    pushLog('Screen-off command sent.')
+  } else {
+    pushLog('Screen-on command sent.')
+  }
 }
 
 async function runAdbStartServer() {
@@ -140,6 +205,93 @@ async function runAdbStartServer() {
       rejectPromise(new Error(`adb start-server failed with exit code ${code}: ${stderr.trim()}`))
     })
   })
+}
+
+async function runAdbCommand(args) {
+  const { spawn } = await import('node:child_process')
+
+  return await new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn(adbPath, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    })
+
+    let stdout = ''
+    let stderr = ''
+
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString()
+    })
+
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString()
+    })
+
+    child.on('error', rejectPromise)
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolvePromise({ stdout, stderr })
+        return
+      }
+
+      rejectPromise(new Error(`adb ${args.join(' ')} failed with exit code ${code}: ${stderr.trim()}`))
+    })
+  })
+}
+
+async function readDeviceScreenPowerState(serial) {
+  const { stdout } = await runAdbCommand(['-s', serial, 'shell', 'dumpsys', 'power'])
+  const normalized = stdout.replace(/\r/g, '')
+
+  if (/Display Power: state=OFF/i.test(normalized)) {
+    return 'off'
+  }
+
+  if (/Display Power: state=ON/i.test(normalized)) {
+    return 'on'
+  }
+
+  if (/mWakefulness=(Asleep|Dozing)/i.test(normalized)) {
+    return 'off'
+  }
+
+  if (/mWakefulness=Awake/i.test(normalized)) {
+    return 'on'
+  }
+
+  return 'unknown'
+}
+
+function startScreenOffGuard(session) {
+  if (!session?.config.screenOff) {
+    return
+  }
+
+  session.screenPowerGuardTimer = setInterval(async () => {
+    if (activeSession !== session || session.screenPowerGuardInFlight) {
+      return
+    }
+
+    session.screenPowerGuardInFlight = true
+
+    try {
+      const state = await readDeviceScreenPowerState(session.serial)
+      if (activeSession !== session) {
+        return
+      }
+
+      if (state === 'on') {
+        pushLog('Screen-off guard detected the device screen is on. Turning it off again.')
+        await setDeviceScreenPower(session.client.controller, AndroidScreenPowerMode.Off)
+      }
+    } catch (error) {
+      if (activeSession === session) {
+        pushLog(`Screen-off guard check failed: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    } finally {
+      session.screenPowerGuardInFlight = false
+    }
+  }, SCREEN_OFF_GUARD_INTERVAL_MS)
 }
 
 async function ensureAdbServerReady() {
@@ -193,7 +345,7 @@ function broadcastVideoPacket(packet) {
   }
 
   const encoded = encodeVideoPacket(packet)
-  for (const ws of videoClients) {
+  for (const ws of videoClients.values()) {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(encoded)
     }
@@ -224,6 +376,11 @@ async function stopSession(reason = 'Mirror session stopped.') {
   try {
     await session.adb.close()
   } catch {}
+
+  if (session.screenPowerGuardTimer) {
+    clearInterval(session.screenPowerGuardTimer)
+    session.screenPowerGuardTimer = undefined
+  }
 
   pushLog(reason)
   broadcastJson({ type: 'session', session: serializeSession() })
@@ -314,6 +471,21 @@ async function startSession(serial, rawConfig = {}) {
 
   activeSession.outputReader = client.output.getReader()
   activeSession.videoReader = video.stream.getReader()
+  activeSession.screenPowerGuardInFlight = false
+
+  if (config.screenOff) {
+    const session = activeSession
+    void (async () => {
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 800))
+      if (activeSession !== session) {
+        return
+      }
+
+      await setDeviceScreenPower(session.client.controller, AndroidScreenPowerMode.Off)
+      pushLog('Screen-off mode enabled for this session.')
+      startScreenOffGuard(session)
+    })()
+  }
 
   void (async () => {
     const session = activeSession
@@ -454,10 +626,10 @@ async function handleClientMessage(ws, rawMessage) {
           await activeSession.client.controller.rotateDevice()
           return
         case 'screen-off':
-          await activeSession.client.controller.setScreenPowerMode(AndroidScreenPowerMode.Off)
+          await setDeviceScreenPower(activeSession.client.controller, AndroidScreenPowerMode.Off)
           return
         case 'screen-on':
-          await activeSession.client.controller.setScreenPowerMode(AndroidScreenPowerMode.Normal)
+          await setDeviceScreenPower(activeSession.client.controller, AndroidScreenPowerMode.Normal)
           return
         default:
           sendJson(ws, { type: 'error', message: `Unknown command: ${payload.command}` })
@@ -530,8 +702,14 @@ const server = createServer(async (request, response) => {
 const wss = new WebSocketServer({ noServer: true })
 const videoWss = new WebSocketServer({ noServer: true })
 
-wss.on('connection', async (ws) => {
-  wsClients.add(ws)
+wss.on('connection', async (ws, request) => {
+  const requestUrl = new URL(request.url ?? '/ws', `http://${host}:${port}`)
+  const clientId = getClientId(requestUrl)
+
+  evictOtherClients(clientId)
+  closeSocket(controlClients.get(clientId), 4001, 'Controller page reconnected.')
+  controlClients.set(clientId, ws)
+
   sendJson(ws, { type: 'hello', session: serializeSession() })
   await broadcastDevices(ws)
 
@@ -547,19 +725,28 @@ wss.on('connection', async (ws) => {
   })
 
   ws.on('close', () => {
-    wsClients.delete(ws)
+    if (controlClients.get(clientId) === ws) {
+      controlClients.delete(clientId)
+    }
   })
 })
 
-videoWss.on('connection', (ws) => {
-  videoClients.add(ws)
+videoWss.on('connection', (ws, request) => {
+  const requestUrl = new URL(request.url ?? '/video', `http://${host}:${port}`)
+  const clientId = getClientId(requestUrl)
+
+  evictOtherClients(clientId)
+  closeSocket(videoClients.get(clientId), 4001, 'Video page reconnected.')
+  videoClients.set(clientId, ws)
 
   if (activeSession?.lastConfigurationPacket) {
     ws.send(encodeVideoPacket(activeSession.lastConfigurationPacket))
   }
 
   ws.on('close', () => {
-    videoClients.delete(ws)
+    if (videoClients.get(clientId) === ws) {
+      videoClients.delete(clientId)
+    }
   })
 })
 

@@ -1,0 +1,94 @@
+<svg width="1170" height="2532" viewBox="0 0 1170 2532" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1170" y2="2532" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#050607"/>
+      <stop offset="1" stop-color="#0A0C10"/>
+    </linearGradient>
+    <linearGradient id="chipStroke" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#7F8CFF"/>
+      <stop offset="1" stop-color="#4EE3C1"/>
+    </linearGradient>
+    <linearGradient id="actionBlue" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#5C76FF"/>
+      <stop offset="1" stop-color="#2D4BE6"/>
+    </linearGradient>
+    <clipPath id="screenClip">
+      <rect x="54" y="164" width="972" height="2130" rx="8"/>
+    </clipPath>
+  </defs>
+
+  <rect width="1170" height="2532" fill="url(#bg)"/>
+
+  <image href="C:/Users/XOS/Documents/xwechat_files/wxid_mujoi9xfz8do22_ac14/temp/RWTemp/2026-07/b1101dd8d6f53bafcf9cdcf5a2f97fc2/9dab34684c60638995b349e9ddf6dc4d.jpg" x="54" y="164" width="972" height="2130" preserveAspectRatio="xMidYMid slice" clip-path="url(#screenClip)"/>
+
+  <rect x="54" y="164" width="972" height="2130" rx="8" stroke="#151922" stroke-width="3"/>
+
+  <rect x="36" y="94" width="300" height="74" rx="20" fill="#101317" stroke="#6D78FF" stroke-width="3"/>
+  <text x="72" y="142" fill="#E6EBFF" font-size="28" font-family="Arial, sans-serif" font-weight="700">QV7201A354</text>
+
+  <rect x="372" y="94" width="330" height="74" rx="20" fill="#101317" stroke="#35E3BA" stroke-width="3"/>
+  <circle cx="434" cy="131" r="18" fill="#35E3BA" opacity="0.22"/>
+  <path d="M421 133C430 123 441 123 450 133" stroke="#35E3BA" stroke-width="6" stroke-linecap="round"/>
+  <path d="M427 141C433 135 439 135 445 141" stroke="#35E3BA" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="436" cy="146" r="4" fill="#35E3BA"/>
+  <text x="472" y="142" fill="#9AF7DF" font-size="24" font-family="Arial, sans-serif">默认 18ms</text>
+
+  <rect x="736" y="94" width="188" height="74" rx="20" fill="#101317" stroke="#6D78FF" stroke-width="3"/>
+  <text x="830" y="142" text-anchor="middle" fill="#E6EBFF" font-size="30" font-family="Arial, sans-serif" font-weight="700">高速</text>
+
+  <g transform="translate(1044,218)">
+    <rect x="0" y="0" width="92" height="92" rx="20" fill="#0C0D11" stroke="#262B35" stroke-width="2"/>
+    <path d="M28 44H50" stroke="#F4F7FA" stroke-width="8" stroke-linecap="round"/>
+    <path d="M62 29L62 59" stroke="#F4F7FA" stroke-width="8" stroke-linecap="round"/>
+  </g>
+
+  <g transform="translate(1044,336)">
+    <rect x="0" y="0" width="92" height="92" rx="20" fill="#0C0D11" stroke="#262B35" stroke-width="2"/>
+    <path d="M28 44H50" stroke="#F4F7FA" stroke-width="8" stroke-linecap="round"/>
+    <path d="M62 33V55" stroke="#F4F7FA" stroke-width="8" stroke-linecap="round"/>
+  </g>
+
+  <g transform="translate(1044,454)">
+    <rect x="0" y="0" width="92" height="92" rx="20" fill="#0C0D11" stroke="#262B35" stroke-width="2"/>
+    <path d="M26 46H66" stroke="#F4F7FA" stroke-width="6" stroke-linecap="round"/>
+  </g>
+
+  <text x="1090" y="650" fill="#FFFFFF" font-size="26" font-family="Arial, sans-serif" text-anchor="middle">默</text>
+  <text x="1090" y="688" fill="#FFFFFF" font-size="26" font-family="Arial, sans-serif" text-anchor="middle">认</text>
+
+  <rect x="1040" y="782" width="100" height="180" rx="22" fill="#0C0D11" stroke="#6D78FF" stroke-width="3"/>
+  <text x="1090" y="848" fill="#C9D1FF" font-size="26" font-family="Arial, sans-serif" text-anchor="middle">专</text>
+  <text x="1090" y="892" fill="#C9D1FF" font-size="26" font-family="Arial, sans-serif" text-anchor="middle">业</text>
+
+  <path d="M1058 1020H1122" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round"/>
+
+  <text x="1090" y="1120" fill="#FFFFFF" font-size="26" font-family="Arial, sans-serif" text-anchor="middle">•••</text>
+  <text x="1090" y="1210" fill="#FFFFFF" font-size="26" font-family="Arial, sans-serif" text-anchor="middle">更</text>
+  <text x="1090" y="1248" fill="#FFFFFF" font-size="26" font-family="Arial, sans-serif" text-anchor="middle">多</text>
+
+  <rect x="1032" y="1348" width="116" height="196" rx="24" fill="url(#actionBlue)"/>
+  <text x="1090" y="1426" fill="#EDF2FF" font-size="28" font-family="Arial, sans-serif" text-anchor="middle">↪</text>
+  <text x="1090" y="1494" fill="#EDF2FF" font-size="28" font-family="Arial, sans-serif" text-anchor="middle">退</text>
+  <text x="1090" y="1534" fill="#EDF2FF" font-size="28" font-family="Arial, sans-serif" text-anchor="middle">出</text>
+
+  <rect x="30" y="2298" width="1000" height="174" rx="0" fill="#060709"/>
+
+  <g transform="translate(92,2334)">
+    <path d="M0 42L30 10" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>
+    <path d="M0 42L30 74" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(214,2334)">
+    <rect x="0" y="0" width="44" height="74" rx="8" stroke="#FFFFFF" stroke-width="8"/>
+    <path d="M34 12L66 0V62L34 74" stroke="#FFFFFF" stroke-width="8" stroke-linejoin="round"/>
+  </g>
+  <g transform="translate(430,2326)">
+    <rect x="0" y="0" width="64" height="72" rx="8" stroke="#FFFFFF" stroke-width="8"/>
+    <path d="M18 88H46" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(634,2330)">
+    <path d="M0 48L46 12L92 48V98H58V62H34V98H0V48Z" stroke="#FFFFFF" stroke-width="8" stroke-linejoin="round"/>
+  </g>
+  <g transform="translate(846,2332)">
+    <path d="M0 22L34 56L0 90" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

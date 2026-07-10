@@ -1,0 +1,81 @@
+<svg width="1170" height="2532" viewBox="0 0 1170 2532" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1170" y2="2532" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#101714"/>
+      <stop offset="1" stop-color="#0A0E0C"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="180" x2="1170" y2="2532" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#16201C"/>
+      <stop offset="1" stop-color="#101614"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#72D7A0"/>
+      <stop offset="1" stop-color="#4FAE76"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1170" height="2532" fill="url(#bg)"/>
+  <rect x="0" y="168" width="1170" height="2364" fill="url(#panel)"/>
+
+  <text x="82" y="282" fill="#A9B5AF" font-size="28" font-family="Arial, sans-serif" letter-spacing="8">WEB SCRCPY</text>
+  <text x="82" y="366" fill="#F5F7F4" font-size="72" font-family="Arial, sans-serif" font-weight="700">Choose Device</text>
+
+  <rect x="850" y="218" width="240" height="84" rx="42" fill="#173128" stroke="#2B5C49" stroke-width="2"/>
+  <text x="970" y="272" text-anchor="middle" fill="#F3F6F2" font-size="34" font-family="Arial, sans-serif">Live control</text>
+
+  <rect x="82" y="444" width="1006" height="1740" rx="56" fill="#121917" stroke="#25302B" stroke-width="2"/>
+  <text x="118" y="530" fill="#A9B5AF" font-size="28" font-family="Arial, sans-serif" letter-spacing="7">DEVICES</text>
+  <text x="118" y="608" fill="#F4F7F3" font-size="68" font-family="Arial, sans-serif" font-weight="700">Your devices</text>
+  <text x="118" y="666" fill="#8FA097" font-size="28" font-family="Arial, sans-serif">首页只负责选择设备，控制和画面放到下一页</text>
+
+  <rect x="896" y="500" width="152" height="74" rx="37" fill="#141B18" stroke="#2D3833" stroke-width="2"/>
+  <text x="972" y="547" text-anchor="middle" fill="#E8ECE8" font-size="28" font-family="Arial, sans-serif">Refresh</text>
+
+  <rect x="118" y="736" width="934" height="188" rx="42" fill="#1A2320" stroke="#355044" stroke-width="2"/>
+  <rect x="148" y="778" width="104" height="104" rx="28" fill="#20312A"/>
+  <circle cx="200" cy="830" r="20" fill="#70D49D"/>
+  <text x="286" y="812" fill="#F4F7F3" font-size="42" font-family="Arial, sans-serif" font-weight="700">rk3288</text>
+  <text x="286" y="868" fill="#93A29A" font-size="26" font-family="Arial, sans-serif">QV7201A354 · Current USB device</text>
+  <rect x="834" y="782" width="184" height="96" rx="32" fill="url(#accent)"/>
+  <text x="926" y="842" text-anchor="middle" fill="#F7FBF7" font-size="34" font-family="Arial, sans-serif" font-weight="700">已选择</text>
+
+  <rect x="118" y="958" width="934" height="188" rx="42" fill="#171E1B" stroke="#28322E" stroke-width="2"/>
+  <rect x="148" y="1000" width="104" height="104" rx="28" fill="#1E2623"/>
+  <circle cx="200" cy="1052" r="20" fill="#E1B04F"/>
+  <text x="286" y="1034" fill="#F4F7F3" font-size="42" font-family="Arial, sans-serif" font-weight="700">Pixel 8</text>
+  <text x="286" y="1090" fill="#93A29A" font-size="26" font-family="Arial, sans-serif">3A121FDH2 · Available</text>
+  <rect x="852" y="1004" width="166" height="92" rx="30" fill="#131916" stroke="#304039" stroke-width="2"/>
+  <text x="935" y="1062" text-anchor="middle" fill="#EAF0EB" font-size="34" font-family="Arial, sans-serif">Select</text>
+
+  <rect x="118" y="1180" width="934" height="188" rx="42" fill="#171E1B" stroke="#28322E" stroke-width="2"/>
+  <rect x="148" y="1222" width="104" height="104" rx="28" fill="#1E2623"/>
+  <circle cx="200" cy="1274" r="20" fill="#CB6959"/>
+  <text x="286" y="1256" fill="#F4F7F3" font-size="42" font-family="Arial, sans-serif" font-weight="700">XQ-AS42</text>
+  <text x="286" y="1312" fill="#93A29A" font-size="26" font-family="Arial, sans-serif">EPNIHGIK99 · Wireless standby</text>
+  <rect x="852" y="1226" width="166" height="92" rx="30" fill="#131916" stroke="#304039" stroke-width="2"/>
+  <text x="935" y="1284" text-anchor="middle" fill="#EAF0EB" font-size="34" font-family="Arial, sans-serif">Select</text>
+
+  <rect x="118" y="1402" width="934" height="188" rx="42" fill="#171E1B" stroke="#28322E" stroke-width="2"/>
+  <rect x="148" y="1444" width="104" height="104" rx="28" fill="#1E2623"/>
+  <circle cx="200" cy="1496" r="20" fill="#88A4FF"/>
+  <text x="286" y="1478" fill="#F4F7F3" font-size="42" font-family="Arial, sans-serif" font-weight="700">Galaxy S24</text>
+  <text x="286" y="1534" fill="#93A29A" font-size="26" font-family="Arial, sans-serif">R58W41... · Available</text>
+  <rect x="852" y="1448" width="166" height="92" rx="30" fill="#131916" stroke="#304039" stroke-width="2"/>
+  <text x="935" y="1506" text-anchor="middle" fill="#EAF0EB" font-size="34" font-family="Arial, sans-serif">Select</text>
+
+  <rect x="118" y="1624" width="934" height="188" rx="42" fill="#171E1B" stroke="#28322E" stroke-width="2"/>
+  <rect x="148" y="1666" width="104" height="104" rx="28" fill="#1E2623"/>
+  <circle cx="200" cy="1718" r="20" fill="#7ED0C8"/>
+  <text x="286" y="1700" fill="#F4F7F3" font-size="42" font-family="Arial, sans-serif" font-weight="700">Redmi K70</text>
+  <text x="286" y="1756" fill="#93A29A" font-size="26" font-family="Arial, sans-serif">6f4c2... · Available</text>
+  <rect x="852" y="1670" width="166" height="92" rx="30" fill="#131916" stroke="#304039" stroke-width="2"/>
+  <text x="935" y="1728" text-anchor="middle" fill="#EAF0EB" font-size="34" font-family="Arial, sans-serif">Select</text>
+
+  <rect x="118" y="1888" width="934" height="208" rx="42" fill="#0F1513" stroke="#202A26" stroke-width="2"/>
+  <text x="154" y="1968" fill="#AAB7B0" font-size="26" font-family="Arial, sans-serif">Next step</text>
+  <text x="154" y="2044" fill="#F5F8F4" font-size="50" font-family="Arial, sans-serif" font-weight="700">选中设备后自动进入控制页</text>
+
+  <rect x="82" y="2226" width="1006" height="170" rx="52" fill="#0F1513" stroke="#202A26" stroke-width="2"/>
+  <text x="118" y="2300" fill="#8F9D96" font-size="26" font-family="Arial, sans-serif">Idea</text>
+  <text x="118" y="2364" fill="#DCE3DD" font-size="34" font-family="Arial, sans-serif">设备选中后直接跳控制页，首页不出现任何控制信息</text>
+</svg>

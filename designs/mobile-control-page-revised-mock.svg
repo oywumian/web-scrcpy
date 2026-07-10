@@ -1,0 +1,66 @@
+<svg width="1170" height="2532" viewBox="0 0 1170 2532" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1170" y2="2532" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#101714"/>
+      <stop offset="1" stop-color="#0A0E0C"/>
+    </linearGradient>
+    <linearGradient id="surface" x1="0" y1="140" x2="1170" y2="2532" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#14201B"/>
+      <stop offset="1" stop-color="#0E1412"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#72D7A0"/>
+      <stop offset="1" stop-color="#4FAE76"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1170" height="2532" fill="url(#bg)"/>
+  <rect x="0" y="156" width="1170" height="2376" fill="url(#surface)"/>
+
+  <rect x="82" y="228" width="182" height="88" rx="34" fill="#15211C" stroke="#2B3B34" stroke-width="2"/>
+  <text x="118" y="264" fill="#93A39B" font-size="22" font-family="Arial, sans-serif">FPS</text>
+  <text x="118" y="304" fill="#F4F8F4" font-size="34" font-family="Arial, sans-serif" font-weight="700">26.6</text>
+
+  <rect x="282" y="228" width="224" height="88" rx="34" fill="#15211C" stroke="#2B3B34" stroke-width="2"/>
+  <text x="318" y="264" fill="#93A39B" font-size="22" font-family="Arial, sans-serif">Bitrate</text>
+  <text x="318" y="304" fill="#F4F8F4" font-size="34" font-family="Arial, sans-serif" font-weight="700">6 Mbps</text>
+
+  <rect x="944" y="228" width="144" height="88" rx="34" fill="#141B18" stroke="#2A3530" stroke-width="2"/>
+  <text x="1016" y="284" text-anchor="middle" fill="#F4F7F3" font-size="34" font-family="Arial, sans-serif">Back</text>
+
+  <text x="82" y="390" fill="#A7B3AD" font-size="28" font-family="Arial, sans-serif" letter-spacing="7">DEVICE</text>
+  <text x="82" y="468" fill="#F5F7F4" font-size="74" font-family="Arial, sans-serif" font-weight="700">XQ-AS42</text>
+
+  <rect x="82" y="540" width="1006" height="1180" rx="58" fill="#090B0A" stroke="#222A26" stroke-width="2"/>
+  <rect x="126" y="592" width="918" height="1078" rx="46" fill="#0D100E"/>
+  <image href="C:/Users/XOS/AppData/Local/Temp/codex-clipboard-bce92476-0388-4ae4-9a50-5dc4013b07ca.png" x="126" y="592" width="918" height="1078" preserveAspectRatio="xMidYMid slice" clip-path="url(#screenClip2)"/>
+  <defs>
+    <clipPath id="screenClip2">
+      <rect x="126" y="592" width="918" height="1078" rx="46"/>
+    </clipPath>
+  </defs>
+
+  <rect x="82" y="1764" width="1006" height="556" rx="52" fill="#121917" stroke="#25302B" stroke-width="2"/>
+  <text x="118" y="1846" fill="#A9B5AF" font-size="28" font-family="Arial, sans-serif" letter-spacing="7">CONTROLS</text>
+  <text x="118" y="1918" fill="#F4F7F3" font-size="60" font-family="Arial, sans-serif" font-weight="700">Quick actions</text>
+
+  <rect x="118" y="1960" width="286" height="114" rx="34" fill="#141B18" stroke="#2D3833" stroke-width="2"/>
+  <rect x="432" y="1960" width="286" height="114" rx="34" fill="#141B18" stroke="#2D3833" stroke-width="2"/>
+  <rect x="746" y="1960" width="286" height="114" rx="34" fill="#141B18" stroke="#2D3833" stroke-width="2"/>
+
+  <rect x="118" y="2096" width="286" height="114" rx="34" fill="#141B18" stroke="#2D3833" stroke-width="2"/>
+  <rect x="432" y="2096" width="286" height="114" rx="34" fill="#141B18" stroke="#2D3833" stroke-width="2"/>
+  <rect x="746" y="2096" width="286" height="114" rx="34" fill="#141B18" stroke="#2D3833" stroke-width="2"/>
+
+  <rect x="118" y="2232" width="914" height="120" rx="38" fill="url(#accent)"/>
+
+  <text x="261" y="2032" text-anchor="middle" fill="#F1F5F1" font-size="36" font-family="Arial, sans-serif">Back</text>
+  <text x="575" y="2032" text-anchor="middle" fill="#F1F5F1" font-size="36" font-family="Arial, sans-serif">Home</text>
+  <text x="889" y="2032" text-anchor="middle" fill="#F1F5F1" font-size="36" font-family="Arial, sans-serif">Apps</text>
+
+  <text x="261" y="2168" text-anchor="middle" fill="#F1F5F1" font-size="36" font-family="Arial, sans-serif">Rotate</text>
+  <text x="575" y="2168" text-anchor="middle" fill="#F1F5F1" font-size="36" font-family="Arial, sans-serif">Screen off</text>
+  <text x="889" y="2168" text-anchor="middle" fill="#F1F5F1" font-size="36" font-family="Arial, sans-serif">Refresh</text>
+
+  <text x="575" y="2308" text-anchor="middle" fill="#F8FBF8" font-size="40" font-family="Arial, sans-serif" font-weight="700">Stop control</text>
+</svg>

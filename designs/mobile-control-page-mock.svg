@@ -1,0 +1,62 @@
+<svg width="1170" height="2532" viewBox="0 0 1170 2532" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1170" y2="2532" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#101714"/>
+      <stop offset="1" stop-color="#0A0E0C"/>
+    </linearGradient>
+    <linearGradient id="surface" x1="0" y1="120" x2="1170" y2="2532" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#14201B"/>
+      <stop offset="1" stop-color="#0E1412"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#72D7A0"/>
+      <stop offset="1" stop-color="#4FAE76"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1170" height="2532" fill="url(#bg)"/>
+  <rect x="0" y="156" width="1170" height="2376" fill="url(#surface)"/>
+
+  <rect x="82" y="224" width="112" height="84" rx="32" fill="#141B18" stroke="#2A3530" stroke-width="2"/>
+  <text x="138" y="278" text-anchor="middle" fill="#F4F7F3" font-size="34" font-family="Arial, sans-serif">←</text>
+  <text x="232" y="272" fill="#A9B5AF" font-size="28" font-family="Arial, sans-serif" letter-spacing="7">CONTROL PAGE</text>
+  <text x="232" y="352" fill="#F5F7F4" font-size="72" font-family="Arial, sans-serif" font-weight="700">Live Screen</text>
+
+  <rect x="846" y="230" width="244" height="82" rx="41" fill="#173128" stroke="#2B5C49" stroke-width="2"/>
+  <text x="968" y="282" text-anchor="middle" fill="#F2F6F2" font-size="34" font-family="Arial, sans-serif">rk3288 online</text>
+
+  <rect x="82" y="420" width="1006" height="1208" rx="58" fill="#090B0A" stroke="#222A26" stroke-width="2"/>
+  <rect x="126" y="474" width="918" height="1100" rx="46" fill="#0D100E"/>
+  <image href="C:/Users/XOS/Documents/xwechat_files/wxid_mujoi9xfz8do22_ac14/temp/RWTemp/2026-07/6700ab808eab64f7a119d8bcc6ca443b.jpg" x="126" y="474" width="918" height="1100" preserveAspectRatio="xMidYMid slice" clip-path="url(#screenClip)"/>
+  <defs>
+    <clipPath id="screenClip">
+      <rect x="126" y="474" width="918" height="1100" rx="46"/>
+    </clipPath>
+  </defs>
+
+  <rect x="82" y="1668" width="1006" height="166" rx="44" fill="#121917" stroke="#25302B" stroke-width="2"/>
+  <text x="118" y="1738" fill="#A9B5AF" font-size="24" font-family="Arial, sans-serif">DEVICE</text>
+  <text x="118" y="1800" fill="#F4F7F3" font-size="38" font-family="Arial, sans-serif" font-weight="700">rk3288</text>
+  <text x="430" y="1738" fill="#A9B5AF" font-size="24" font-family="Arial, sans-serif">FPS</text>
+  <text x="430" y="1800" fill="#F4F7F3" font-size="38" font-family="Arial, sans-serif" font-weight="700">28</text>
+  <text x="638" y="1738" fill="#A9B5AF" font-size="24" font-family="Arial, sans-serif">RESOLUTION</text>
+  <text x="638" y="1800" fill="#F4F7F3" font-size="38" font-family="Arial, sans-serif" font-weight="700">1280 × 720</text>
+
+  <rect x="82" y="1868" width="1006" height="476" rx="52" fill="#121917" stroke="#25302B" stroke-width="2"/>
+  <text x="118" y="1950" fill="#A9B5AF" font-size="28" font-family="Arial, sans-serif" letter-spacing="7">QUICK CONTROLS</text>
+  <text x="118" y="2022" fill="#F4F7F3" font-size="56" font-family="Arial, sans-serif" font-weight="700">Focused actions</text>
+
+  <rect x="118" y="2064" width="286" height="114" rx="34" fill="#141B18" stroke="#2D3833" stroke-width="2"/>
+  <rect x="432" y="2064" width="286" height="114" rx="34" fill="#141B18" stroke="#2D3833" stroke-width="2"/>
+  <rect x="746" y="2064" width="286" height="114" rx="34" fill="#141B18" stroke="#2D3833" stroke-width="2"/>
+  <rect x="118" y="2200" width="286" height="114" rx="34" fill="#141B18" stroke="#2D3833" stroke-width="2"/>
+  <rect x="432" y="2200" width="286" height="114" rx="34" fill="#141B18" stroke="#2D3833" stroke-width="2"/>
+  <rect x="746" y="2200" width="286" height="114" rx="34" fill="url(#accent)"/>
+
+  <text x="261" y="2136" text-anchor="middle" fill="#F0F4F1" font-size="36" font-family="Arial, sans-serif">Back</text>
+  <text x="575" y="2136" text-anchor="middle" fill="#F0F4F1" font-size="36" font-family="Arial, sans-serif">Home</text>
+  <text x="889" y="2136" text-anchor="middle" fill="#F0F4F1" font-size="36" font-family="Arial, sans-serif">Apps</text>
+  <text x="261" y="2272" text-anchor="middle" fill="#F0F4F1" font-size="36" font-family="Arial, sans-serif">Rotate</text>
+  <text x="575" y="2272" text-anchor="middle" fill="#F0F4F1" font-size="36" font-family="Arial, sans-serif">Screen off</text>
+  <text x="889" y="2272" text-anchor="middle" fill="#F7FBF7" font-size="36" font-family="Arial, sans-serif" font-weight="700">返回首页</text>
+</svg>
